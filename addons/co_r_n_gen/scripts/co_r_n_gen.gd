@@ -1,5 +1,19 @@
+@icon("res://addons/co_r_n_gen/icons/co_r_n_gen_w.svg") # for dark themes
+#@icon("res://addons/co_r_n_gen/icons/co_r_n_gen_b.svg") # for light themes
+
 ## Convenient random number generator with handy methods.
 class_name CoRNGen extends RandomNumberGenerator
+
+
+## Service function for untyped version of shuffle().
+## Can to be called separately by users to measure arrays.
+func can_hold_types(array: Array) -> bool:
+	var counts := func(accum: Dictionary, item) -> Dictionary:
+		accum[typeof(item)] = accum.get_or_add(typeof(item), 0) + 1
+		return accum
+	var criteria := func(accum: bool, item) -> bool:
+		return accum and item > 1
+	return array.reduce(counts, {}).values().reduce(criteria, true)
 
 
 ## Calculates rate of success for 'what' out 'of'.
@@ -26,10 +40,9 @@ func chance_table(what: int, of: int = 10) -> Array[bool]:
 	
 	for iteration in what:
 		var index := self.randi() % of
-		while result[index]: # Searching 'false'
+		while result[index]: # Searching 'false' ...
 			index = wrapi(index + self.randi() % of, 0,  of - 1)
-			#index = posmod(index + posmod(self.randi(), what), of)
-		result[index] = true # and make it 'true'
+		result[index] = true # ...and make it 'true'
 	
 	return result
 
@@ -69,6 +82,13 @@ func do_or_not(what: Callable) -> void:
 		what.call()
 
 
+## Randomly doing an action from callback or not, using chances.
+func do_or_not_with_chance(what: Callable, with: int = 1, of: int = 2) -> void:
+	# Default chance 1 of 2 identical to randbool().
+	if chance(with, of):
+		what.call()
+
+
 ## Reimplementation of engine function within generator instance with full access to seed and state.
 ## Returns the element of the array at random index.
 func pick_random(from: Array) -> Variant:
@@ -97,54 +117,74 @@ func return_or_not(what: Callable, fallback: Variant = null) -> Variant:
 		return fallback
 
 
-## Reimplementation of engine function within generator instance.
-func shuffle(what: Array, type_mixing := false) -> Array:
-	if what.size() == 2: 
+## Randomly returning a value from callback or fallback, using chances.
+func return_or_not_with_chance(what: Callable, fallback: Variant = null, with: int = 1, of: int = 2) -> Variant:
+	if chance(with, of):
+		var result = what.call()
+		return fallback if result == null else result
+	else:
+		return fallback
+
+
+## Hard version of shuffle method. Looks more professional if you stared.
+func riffle(array: Array) -> Array:
+	if array.size() == 2: 
 		if randbool():
-			what.reverse()
-	elif what.size() > 2:
-		var type_count := func(idx: int) -> int:
-			return what.filter(func(item): return typeof(item) == typeof(what[idx])).size()
-		var is_equal := func(idx1: int, idx2: int) -> bool:
-			if idx1 == idx2:
-				return true
-			if type_mixing:
-				return false
-			if type_count.call(idx1) < 2 or type_count.call(idx2) < 2:
-				return false
-			#var is_type_count_1 = type_count.call(typeof(what[idx1])) < 2
-			#var is_type_count_2 = type_count.call(typeof(what[idx2])) < 2
-			#var cnts_fail = is_type_count_1 or is_type_count_2
-			#var is_t_nt_eq = typeof(what[idx1]) != typeof(what[idx2])
-			#prints("counts:", one_of_counts_fail)
-			return typeof(what[idx1]) != typeof(what[idx2])
+			array.reverse()
+	elif array.size() > 2:
+		var slifir := array.slice(0, floori(array.size() / 2.0))
+		var slisec := array.slice(floori(array.size() / 2.0), array.size())
+		array.clear()
+		while slifir or slisec:
+			if randbool():
+				if slifir:
+					array.append(slifir.pop_back())
+			else:
+				if slisec:
+					array.append(slisec.pop_back())
+	return array
+
+
+## Reimplementation of engine function within generator instance.
+## Don't disable type mixing if array hasn't at least 2 items of each type, 
+## because in that case type mixing to be auto-enabled and you get UB.
+func shuffle(array: Array, type_mixing := true) -> Array:
+	if not type_mixing:
+		type_mixing = not can_hold_types(array)
+		if type_mixing:
+			push_error("type mixing was re-enabled")
+	if array.size() == 2: 
+		if randbool():
+			array.reverse()
+	elif array.size() > 2:
 		var tmp # Variant
-		var j : int
-		for i in range(what.size()-1, -1, -1):
-			j = self.randi() % what.size()
-			while is_equal.call(i, j): # (i == j) or (not type_mixing and typeof(what[i]) != typeof(what[j])): #
-				j = self.randi() % what.size()
-			tmp = what[i]
-			what[i] = what[j]
-			what[j] = tmp
-	return what
+		var j: int
+		for i in range(array.size()-1, -1, -1):
+			j = self.randi() % array.size()
+			while j == i if type_mixing else j == i or typeof(array[i]) != typeof(array[j]): 
+				j = self.randi() % array.size()
+			tmp = array[i]
+			array[i] = array[j]
+			array[j] = tmp
+	return array
 
 
 ## Boolean version of shuffle function.
-func shuffleb(what: Array[bool]) -> Array[bool]:
-	return Array(shuffle(what), TYPE_BOOL, &"", null)
+func shuffleb(array: Array[bool]) -> Array[bool]:
+	return Array(shuffle(array), TYPE_BOOL, &"", null)
 
 ## Floating-point version of shuffle function.
-func shufflef(what: Array[float]) -> Array[float]:
-	return Array(shuffle(what), TYPE_FLOAT, &"", null)
+func shufflef(array: Array[float]) -> Array[float]:
+	return Array(shuffle(array), TYPE_FLOAT, &"", null)
 
 ## Integer version of shuffle function.
-func shufflei(what: Array[int]) -> Array[int]:
-	return Array(shuffle(what), TYPE_INT, &"", null)
+func shufflei(array: Array[int]) -> Array[int]:
+	return Array(shuffle(array), TYPE_INT, &"", null)
 
 ## Packed Int32 version of shuffle function.
-func shuffleip(what: PackedInt32Array) -> PackedInt32Array:
-	return Array(shuffle(what), TYPE_INT, &"", null)
+func shuffleip(array: PackedInt32Array) -> PackedInt32Array:
+	return Array(shuffle(array), TYPE_INT, &"", null)
+
 
 # Feel free to add so many typed versions, that you need.
 # Byt for performance reasons you must rewrite code for only type.
@@ -152,53 +192,21 @@ func shuffleip(what: PackedInt32Array) -> PackedInt32Array:
 # But the typed variables as below.
 
 ## String version of shuffle function.
-func shuffles(what: Array[String]) -> Array[String]:
-	if what.size() == 2: 
+func shuffles(array: Array[String]) -> Array[String]:
+	if array.size() == 2: 
 		if randbool():
-			what.reverse()
-	elif what.size() > 2:
+			array.reverse()
+	elif array.size() > 2:
 		var tmp : String
 		var j : int
-		for i in range(what.size()-1, -1, -1):
-			tmp = what[i]
-			j = self.randi() % what.size()
-			what[i] = what[j]
-			what[j] = tmp
-	return what
-
-
-func test(rollback_state := false) -> void:
-	var stored_state := self.state
-	
-	print(shuffle(["su","mo","tu","we","th","fr","sa", 0,1,2,3,4,5,6,7,8,9,3,124,3.9,7]))
-	return
-	#var iiss := []
-	#iiss.resize(10)
-	#iiss.fill("bl")
-	#for i in iiss.size():
-		#iiss[i] = pick_random(["Hds", "Tls", "Stk", "Flt"])
-		#iiss.append(return_or_not(coin, &"stuck"))
-		#iiss.append(return_or_not(coin.bind(&"O", &"I"), &"A"))
-		#iiss.append(return_or_not(dice.bind(1, 8), -1))
-	#prints("arrayy:", iiss)
-	
-	var roll: int
-	for lucky in chance_table(3, 5):
-		if lucky:
-			roll = dice(1,12,-3)
-			print("1d12 with bonus -3: %s" % roll)
-		else:
-			roll = max(dice(1,6), dice(1,6))
-			print('max of 2d6: %s' % roll)
-	
-	var deck := ["BJ", "RJ"]
-	for suit in ["в™Ґ", "в™Ј", "в™ ", "в™¦"]:
-		for card in ['A',2,3,4,5,6,7,8,9,10,'J','D','K']:
-			deck.append("%s%s" % [card, suit])
-	print(shuffle(deck))
-	
-	if rollback_state:
-		self.state = stored_state
+		for i in range(array.size()-1, -1, -1):
+			tmp = array[i]
+			j = self.randi() % array.size()
+			while j == i: 
+				j = self.randi() % array.size()
+			array[i] = array[j]
+			array[j] = tmp
+	return array
 
 
 func _to_string() -> String:
