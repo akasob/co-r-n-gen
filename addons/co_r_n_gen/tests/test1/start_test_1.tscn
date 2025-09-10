@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://2axdqbb4jba6"]
+
+[ext_resource type="Script" path="res://addons/co_r_n_gen/tests/test1/start_test_1.gd" id="1_4vh4e"]
+
+[node name="Test" type="Node"]
+script = ExtResource("1_4vh4e")
